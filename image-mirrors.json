@@ -1,0 +1,8 @@
+{
+  "mysql:5.7.23": "docker.m.daocloud.io/library/mysql:5.7.23",
+  "apache/kudu:1.17.0": "docker.m.daocloud.io/apache/kudu:1.17.0",
+  "apache/impala:4.5.0-impala_quickstart_hms": "docker.m.daocloud.io/apache/impala:4.5.0-impala_quickstart_hms",
+  "apache/impala:4.5.0-statestored": "docker.m.daocloud.io/apache/impala:4.5.0-statestored",
+  "apache/impala:4.5.0-catalogd": "docker.m.daocloud.io/apache/impala:4.5.0-catalogd",
+  "apache/impala:4.5.0-impalad_coord_exec": "docker.m.daocloud.io/apache/impala:4.5.0-impalad_coord_exec"
+}
