@@ -1,0 +1,108 @@
+
+x-redis-common: &redis-common
+  image: redis:7.4
+  command:
+    - /bin/sh
+    - -c
+    - |
+      printf 'user default off\nuser %s on >%s ~* &* +@all\n' "$$REDIS_USERNAME" "$$REDIS_PASSWORD" > /tmp/users.acl
+      exec redis-server \
+        --port 6379 \
+        --cluster-enabled yes \
+        --cluster-config-file nodes.conf \
+        --cluster-node-timeout 5000 \
+        --appendonly yes \
+        --protected-mode yes \
+        --bind 0.0.0.0 \
+        --aclfile /tmp/users.acl
+  environment: &redis-env
+    REDIS_USERNAME: ${REDIS_USERNAME:-redisuser}
+    REDIS_PASSWORD: ${REDIS_PASSWORD:?Please set REDIS_PASSWORD in .env}
+  networks:
+    - redis-cluster
+  healthcheck:
+    test:
+      - CMD-SHELL
+      - 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli --user "$$REDIS_USERNAME" ping | grep -q PONG'
+    interval: 3s
+    timeout: 2s
+    retries: 20
+
+services:
+  redis-node-1:
+    <<: *redis-common
+    container_name: redis-node-1
+    ports:
+      - "7001:6379"
+      - "17001:16379"
+    volumes:
+      - redis-node-1-data:/data
+
+  redis-node-2:
+    <<: *redis-common
+    container_name: redis-node-2
+    ports:
+      - "7002:6379"
+      - "17002:16379"
+    volumes:
+      - redis-node-2-data:/data
+
+  redis-node-3:
+    <<: *redis-common
+    container_name: redis-node-3
+    ports:
+      - "7003:6379"
+      - "17003:16379"
+    volumes:
+      - redis-node-3-data:/data
+
+  redis-cluster-init:
+    image: redis:7.4
+    container_name: redis-cluster-init
+    networks:
+      - redis-cluster
+    environment:
+      <<: *redis-env
+    depends_on:
+      redis-node-1:
+        condition: service_healthy
+      redis-node-2:
+        condition: service_healthy
+      redis-node-3:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        rcli() {
+          REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli \
+            --user "$$REDIS_USERNAME" "$$@"
+        }
+
+        if rcli -h redis-node-1 cluster info 2>/dev/null | grep -q 'cluster_state:ok'; then
+          echo "Redis Cluster already initialized"
+          exit 0
+        fi
+
+        echo "Initializing Redis Cluster..."
+        REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli \
+          --user "$$REDIS_USERNAME" \
+          --cluster create \
+          redis-node-1:6379 \
+          redis-node-2:6379 \
+          redis-node-3:6379 \
+          --cluster-replicas 0 \
+          --cluster-yes
+
+        echo "Redis Cluster initialization finished"
+
+networks:
+  redis-cluster:
+    driver: bridge
+
+volumes:
+  redis-node-1-data:
+  redis-node-2-data:
+  redis-node-3-data:
+
